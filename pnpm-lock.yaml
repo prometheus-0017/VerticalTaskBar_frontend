@@ -11,12 +11,12 @@ importers:
       axios:
         specifier: ^1.10.0
         version: 1.10.0
-      stallar-rpc:
-        specifier: link:C:/Users/lzy/Desktop/stallar-rpc
-        version: link:../../stallar-rpc
       vue:
         specifier: ^3.5.17
         version: 3.5.17(typescript@5.8.3)
+      xuri-rpc:
+        specifier: ^1.0.9
+        version: 1.0.9
     devDependencies:
       '@vitejs/plugin-vue':
         specifier: ^6.0.0
@@ -620,6 +620,9 @@ packages:
       typescript:
         optional: true
 
+  xuri-rpc@1.0.9:
+    resolution: {integrity: sha512-bjZzgsqdQ6i3cFndTU07avq1ga8i1crp2NHbsYURNH9Nm5MKb0fW5n78U77vkprym2pyZFQoQ+GLX5gPbLx3Mg==}
+
 snapshots:
 
   '@babel/helper-string-parser@7.27.1': {}
@@ -1105,3 +1108,5 @@ snapshots:
       '@vue/shared': 3.5.17
     optionalDependencies:
       typescript: 5.8.3
+
+  xuri-rpc@1.0.9: {}

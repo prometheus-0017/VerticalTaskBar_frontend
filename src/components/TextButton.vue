@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
-// let props=defineProps<{ text: string }>()
+let props=defineProps({
+  tooltip: {
+    default: undefined
+  }
+})
 
 </script>
 
 <template>
-  <span class="my-button"><slot></slot></span>
+  <span class="my-button" :title="tooltip"><slot></slot></span>
 </template>
 
 <style scoped>

@@ -5,8 +5,23 @@ import Twin from './components/Twin.vue';
 import nnode from './nnode.js';
 import {getId} from './nnode.js'
 import type { Ref } from 'vue';
-import {main} from './rpcTest.ts'
-main()
+import { type MessageReceiverOptions,PlainProxyManager,RunnableProxyManager,MessageReceiver,Client,asProxy,getMessageReceiver,setHostId,type ISender } from 'xuri-rpc'
+import { WebSocketConnectionKeeper,WebSocketSender } from 'xuri-rpc'
+
+
+let client=new Client()
+let sender=new WebSocketSender(new WebSocketConnectionKeeper(window.location.hostname,18765,'/',client))
+client.setSender(sender)
+let rpc:any=null
+async function prepareRpc(){
+  rpc=await client.getObject('rpc')
+}
+
+let shouldTrim=ref(false)
+function switchShouldTrim(){
+  shouldTrim.value=!shouldTrim.value
+}
+
 function confirm(message: string): Promise<boolean> {
 
   return new Promise((resolve) => {
@@ -39,6 +54,7 @@ interface Task {
 interface TaskList {
   id: string;
   name: string;
+  searchQuery: string;
   tasks: Task[];
 }
 
@@ -57,6 +73,9 @@ function getListById(tagId:string){
   let res=taskList.tasks
   return res
 }
+const currentTaskList=computed(() => {
+  return taskLists.value.find(t => t.id === currentTaskListShowing.value);
+});
 
 // 过滤当前标签下的项目
 const currentTaskListToShow = computed(() => {
@@ -65,8 +84,12 @@ const currentTaskListToShow = computed(() => {
     return []
   }
 
-  const query = searchQuery.value.toLowerCase();
-
+  let query = queryCursor.value!.searchQuery.toLowerCase()
+  if(shouldTrim.value){
+    query=query.trim()
+  }
+  // searchQuery.value.toLowerCase();
+  
   return taskList.filter(item =>
     (item.modifiedName || item.originalName).toLowerCase().includes(query) || (item.processName)?.toLocaleLowerCase().includes(query)
   );
@@ -88,7 +111,7 @@ function onTagClick(tag: TaskList) {
   currentTaskListShowing.value = tag.id;
 }
 function exit(){
-  nnode.rpc('exit',[])
+  rpc.exit()
 }
 // 删除项
 async function onItemDelete(item: Task) {
@@ -235,22 +258,24 @@ async function refreshLoop(){
     while(true){
       try{
         await refresh()
+        await sleep(500)
       }catch(e){
         console.log(e)
       }
-      await sleep(500)
     }
 }
 let version=0
 async function  refresh() {
-  let res=await nnode.rpc('queryHasUpdate',[version])
-  if(res.data==false){
-    return;
-  }
-  version=res.data
-  res=await nnode.rpc('queryList',[])
+  // let res=await nnode.rpc('queryHasUpdate',[version])
+  // if(res.data==false){
+  //   return;
+  // }
+  // version=res.data
+  version=await rpc.queryHasUpdate(version)
+  let windowsList=await rpc.queryList()
+  // nnode.rpc('queryList',[])
   const newTaskMap=new Map()
-  for (let item of res.data){
+  for (let item of windowsList){
     newTaskMap.set(item.id,item)
   }
   
@@ -297,13 +322,34 @@ function addTaskList(){
     if (name.trim() === '') {
       return;
     }
-    taskLists.value.push({id:getId(),name,tasks:[]})
+    taskLists.value.push({id:getId(),name,tasks:[],searchQuery:''})
   })
 }
+let globalQueryCursor:TaskList={
+  id:'',
+  name:'',
+  tasks:[],
+  searchQuery:''
+}
+let globalQuery:Ref<boolean>=ref(false)
+let queryCursor=computed(()=>{
+  if(globalQuery.value){
+    return globalQueryCursor
+  }
+  return currentTaskList.value
+})
+function switchGlobalSearchQuery(){
+  if(!globalQuery.value){
+    globalQueryCursor.searchQuery=currentTaskList.value!.searchQuery
+  }
+  globalQuery.value=!globalQuery.value
+}
+
 function onDropListOver(event,item:Task){
   event.preventDefault();
   if(event.dataTransfer.types.includes('Files')){
-    nnode.rpc('toTop',[item.id])
+    // nnode.rpc('toTop',[item.id])
+    rpc.toTop(item.id)
   }
 }
 function onDropTagOver(event,item:TaskList){
@@ -312,19 +358,23 @@ function onDropTagOver(event,item:TaskList){
     onTagClick(item)
   }
 }
-
+let ready:Ref<boolean>=ref(false)
 onMounted(async () => {
-  let res=await nnode.rpc('queryList',[])
-  taskLists.value.push({id:'main',name:'main',tasks:res.data})
-  mainTaskMap = new Map(res.data.map((item:Task) => [item.id, item]))
+  await prepareRpc()
+  // let res=await nnode.rpc('queryList',[])
+  let windowList=await rpc.queryList()
+  taskLists.value.push({id:'main',name:'main',tasks:windowList,searchQuery:''})
+  mainTaskMap = new Map(windowList.map((item:Task) => [item.id, item]))
+  ready.value=true
 
-  refreshLoop()
+  setInterval(refresh,500)
 
   window.addEventListener('keydown', handleKeyDown);
 });
 async function onClickList(item){
   currentItemClicked.value={type:'list',item}
-  await nnode.rpc('toTop',[item.id])
+  rpc.toTop(item.id)
+  // await nnode.rpc('toTop',[item.id])
 }
 
 function deleteItem(idx:number){
@@ -341,25 +391,32 @@ onBeforeUnmount(() => {
 let pin:Ref<boolean>=ref(false)
 const currentItemClicked:Ref<ItemProxy|null>=ref(null)
 async function togglePin(){
-  let res=await nnode.rpc('pin',[!pin.value])
-  pin.value=res.data
+  let pinValue=await rpc.pin(!pin.value)
+  // let res=await nnode.rpc('pin',[!pin.value])
+  pin.value=pinValue
 }
 async function collapse() {
-  await nnode.rpc('collapse',[])
+  await rpc.collapse()
+// 
+  // await nnode.rpc('collapse',[])
 }
 async function expand() {
-  await nnode.rpc('expand',[])
+  await rpc.expand()
+  // await nnode.rpc('expand',[])
 }
 </script>
 
 <template>
-  <div class="component-container" :class="{ narrow: !isWideMode }"  @drop.prevent="()=>{console.log('hhhh')}">
+  <div class="component-container" :class="{ narrow: !isWideMode }"  @drop.prevent="()=>{console.log('hhhh')}" v-if="ready">
     <!-- 第0行：按钮 -->
     <twin style="height: 30px;">
       <span>
-        <text-button @click="collapse"><</text-button>
-        <text-button @click="togglePin">{{ !pin?'定':'动' }}</text-button>
+        <text-button @click="collapse" :tooltip="'收回任务栏'"><</text-button>
+        <text-button @click="togglePin" :tooltip="pin?'当前鼠标移出后任务栏不会自动收回':'当前鼠标移出后任务栏会自动收回'">{{ pin?'定':'动' }}</text-button>
+        <text-button @click="switchGlobalSearchQuery" :tooltip="globalQuery?'当前任务栏共用一个搜索条件':'当前每个任务栏使用独立的搜索条件'">{{ globalQuery?'共':'单' }}</text-button>
+        <text-button @click="switchShouldTrim" :tooltip="shouldTrim?'当前搜索会去掉首尾空格':'当前搜索不会去掉首尾空格'">{{ shouldTrim?'修':'留' }}</text-button>
       </span>
+
       <text-button @click="exit" v-if="isWideMode">x</text-button>
     </twin>
 
@@ -390,7 +447,7 @@ async function expand() {
         v-if="isWideMode"
         type="text"
         placeholder="Filter..."
-        v-model="searchQuery"
+        v-model="queryCursor!.searchQuery"
       />
     </div>
 
@@ -413,7 +470,7 @@ async function expand() {
         <twin style="width: 100%;">
           <span style="display: flex;flex:1">
             <img :src="item.modifiedIcon || item.originalIcon" alt="" style="width: 32px;height: 32px;" />
-            <span v-if="isWideMode" style="flex: 1;text-overflow: ellipsis;text-align: left; word-wrap: break-word; overflow: hidden;height:28px;width:1px">{{ item.modifiedName || item.originalName }}</span>
+            <span :title="item.processName" v-if="isWideMode" style="flex: 1;text-overflow: ellipsis;text-align: left; word-wrap: break-word; overflow: hidden;height:28px;width:1px">{{ item.modifiedName || item.originalName }}</span>
           </span>
           <text-button  v-if="isWideMode && currentTaskListShowing!=='main'"  class="delete-btn" @click.stop="deleteItem(idx)">x</text-button>
         </twin>

@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "axios": "^1.10.0",
-    "stallar-rpc": "link:C:/Users/lzy/Desktop/stallar-rpc",
+    "xuri-rpc": "^1.0.9",
     "vue": "^3.5.17"
   },
   "devDependencies": {
