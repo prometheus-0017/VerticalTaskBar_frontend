@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, nextTick, reactive } from 'vue';
 import TextButton from './components/TextButton.vue';
 import Twin from './components/Twin.vue';
 import nnode from './nnode.js';
@@ -7,6 +7,7 @@ import {getId} from './nnode.js'
 import type { Ref } from 'vue';
 import { type MessageReceiverOptions,PlainProxyManager,RunnableProxyManager,MessageReceiver,Client,asProxy,getMessageReceiver,setHostId,type ISender } from 'xuri-rpc'
 import { WebSocketConnectionKeeper,WebSocketSender } from 'xuri-rpc'
+import { config } from './components/config'
 
 
 let client=new Client()
@@ -17,9 +18,26 @@ async function prepareRpc(){
   rpc=await client.getObject('rpc')
 }
 
-let shouldTrim=ref(false)
+let shouldTrim=computed(() => {
+  return config.shouldTrim;
+});
 function switchShouldTrim(){
-  shouldTrim.value=!shouldTrim.value
+  config.shouldTrim=!config.shouldTrim
+}
+
+function switchBtnColor(){
+  if(config.buttonColor=='green'){
+    config.buttonColor='blue'
+  }else{
+    config.buttonColor='green'
+  }
+}
+function switchNightMode(){
+  if(config.nightMode){
+    config.nightMode=false
+  }else{
+    config.nightMode=true
+  }
 }
 
 function confirm(message: string): Promise<boolean> {
@@ -54,6 +72,7 @@ interface Task {
 interface TaskList {
   id: string;
   name: string;
+  scrollStatus:number;
   searchQuery: string;
   tasks: Task[];
 }
@@ -104,11 +123,20 @@ function toggleWidth() {
     document.body.style.width='50px';
   }
 }
-
+function next(){
+  return new Promise(resolve=>{
+    nextTick(()=>resolve(null))
+  })
+}
+let scrollContainer=ref(null);
 // 点击标签切换
-function onTagClick(tag: TaskList) {
+async function onTagClick(tag: TaskList) {
+  let scroll=scrollContainer.value?.scrollTop
+  currentTaskList.value.scrollStatus=scroll
   currentItemClicked.value={type:'tag',item:tag}
   currentTaskListShowing.value = tag.id;
+  await next()
+  scrollContainer.value.scrollTop=currentTaskList.value.scrollStatus
 }
 function exit(){
   rpc.exit()
@@ -331,7 +359,24 @@ let globalQueryCursor:TaskList={
   tasks:[],
   searchQuery:''
 }
-let globalQuery:Ref<boolean>=ref(false)
+let saveInterval:number|null=null;
+let saveFinSign=ref('存')
+async function saveStatus(){
+  let status={
+    config:config,
+    taskLists:taskLists.value
+  }
+  if(saveInterval!==null){
+    clearInterval(saveInterval)
+  }
+  saveFinSign.value='〇'  
+  await rpc.saveStatus(status)
+  saveFinSign.value='√'
+  saveInterval=setInterval(()=>saveFinSign.value='存',500)
+}
+let globalQuery=computed(()=>{
+  return config.globalQuery
+})
 let queryCursor=computed(()=>{
   if(globalQuery.value){
     return globalQueryCursor
@@ -342,7 +387,7 @@ function switchGlobalSearchQuery(){
   if(!globalQuery.value){
     globalQueryCursor.searchQuery=currentTaskList.value!.searchQuery
   }
-  globalQuery.value=!globalQuery.value
+  config.globalQuery=!globalQuery.value
 }
 
 function onDropListOver(event,item:Task){
@@ -362,9 +407,18 @@ let ready:Ref<boolean>=ref(false)
 onMounted(async () => {
   await prepareRpc()
   // let res=await nnode.rpc('queryList',[])
-  let windowList=await rpc.queryList()
-  taskLists.value.push({id:'main',name:'main',tasks:windowList,searchQuery:''})
-  mainTaskMap = new Map(windowList.map((item:Task) => [item.id, item]))
+  const initData=await rpc.loadStatus()
+  if(initData==null){
+    let windowList=await rpc.queryList()
+    taskLists.value.push({id:'main',name:'main',tasks:windowList,searchQuery:''})
+    mainTaskMap = new Map(windowList.map((item:Task) => [item.id, item]))
+  }else{
+    taskLists.value=initData.taskLists
+    Object.assign(config,initData.config)
+    let windowList=getListById('main')
+    mainTaskMap = new Map(windowList!.map((item:Task) => [item.id, item]))
+    await rpc.pin(config.pin)
+  }
   ready.value=true
 
   setInterval(refresh,500)
@@ -385,29 +439,28 @@ function deleteItem(idx:number){
   currentTaskList?.tasks.splice(idx,1)
 }
 
+
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown);
 });
-let pin:Ref<boolean>=ref(false)
+let pin=computed(()=>{
+  return config.pin
+})
 const currentItemClicked:Ref<ItemProxy|null>=ref(null)
 async function togglePin(){
   let pinValue=await rpc.pin(!pin.value)
-  // let res=await nnode.rpc('pin',[!pin.value])
-  pin.value=pinValue
+  config.pin=pinValue 
 }
 async function collapse() {
   await rpc.collapse()
-// 
-  // await nnode.rpc('collapse',[])
 }
 async function expand() {
   await rpc.expand()
-  // await nnode.rpc('expand',[])
 }
 </script>
 
 <template>
-  <div class="component-container" :class="{ narrow: !isWideMode }"  @drop.prevent="()=>{console.log('hhhh')}" v-if="ready">
+  <div class="component-container" :class="{ narrow: !isWideMode,'background-night':config.nightMode,'background':!config.nightMode }"  @drop.prevent="()=>{console.log('hhhh')}" v-if="ready">
     <!-- 第0行：按钮 -->
     <twin style="height: 30px;">
       <span>
@@ -415,6 +468,10 @@ async function expand() {
         <text-button @click="togglePin" :tooltip="pin?'当前鼠标移出后任务栏不会自动收回':'当前鼠标移出后任务栏会自动收回'">{{ pin?'定':'动' }}</text-button>
         <text-button @click="switchGlobalSearchQuery" :tooltip="globalQuery?'当前任务栏共用一个搜索条件':'当前每个任务栏使用独立的搜索条件'">{{ globalQuery?'共':'单' }}</text-button>
         <text-button @click="switchShouldTrim" :tooltip="shouldTrim?'当前搜索会去掉首尾空格':'当前搜索不会去掉首尾空格'">{{ shouldTrim?'修':'留' }}</text-button>
+        <text-button @click="switchBtnColor" :tooltip="config.buttonColor=='green'?'当前按钮是绿色的':'当前按钮是蓝色的'">{{ config.buttonColor=='green'?'绿':'蓝' }}</text-button>
+        <text-button @click="switchNightMode" :tooltip="!config.nightMode?'当前是亮色主题':'当前是暗色主题'">{{ !config.nightMode?'日':'夜' }}</text-button>
+        <text-button @click="saveStatus" :tooltip="保存当前配置">{{ saveFinSign }}</text-button>
+
       </span>
 
       <text-button @click="exit" v-if="isWideMode">x</text-button>
@@ -452,7 +509,7 @@ async function expand() {
     </div>
 
     <!-- 第3行：列表 -->
-    <div class="row list-container" style="flex:1;display: flex;overflow: auto;">
+    <div class="row list-container" style="flex:1;display: flex;overflow: auto;" ref="scrollContainer">
       <ul class="item-list" :class="{ wide: isWideMode }" style="padding:0;flex:1">
         <li
           :class="{current: currentItemClicked?.item===item}"
@@ -541,5 +598,13 @@ async function expand() {
 .list-container img {
   width: 20px;
   height: 20px;
+}
+.background{
+  background-color: rgb(255, 255, 255);
+  color:black;
+}
+.background-night{
+  background-color: rgb(0, 0, 0);
+  color:grey;
 }
 </style>
