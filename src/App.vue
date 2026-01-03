@@ -135,6 +135,12 @@ async function onTagClick(tag: TaskList) {
   currentTaskList.value.scrollStatus=scroll
   currentItemClicked.value={type:'tag',item:tag}
   currentTaskListShowing.value = tag.id;
+  for(let item of tag.tasks){
+    if(item.id in hoverState){
+      continue
+    }
+    hoverState[item.id]=false
+  }
   await next()
   scrollContainer.value.scrollTop=currentTaskList.value.scrollStatus
 }
@@ -339,6 +345,7 @@ async function  refresh() {
     mainTaskMap.set(item.id,item)
     getListById('main')?.push(item)
   }
+  
   console.log(mainTaskMap)
 
 }
@@ -430,6 +437,8 @@ async function onClickList(item){
   rpc.toTop(item.id)
   // await nnode.rpc('toTop',[item.id])
 }
+//tmd li:hover btn not effiect
+let hoverState:Record<string,boolean>={}
 
 function deleteItem(idx:number){
   if(currentTaskListShowing.value=='main'){
@@ -515,6 +524,8 @@ async function expand() {
           :class="{current: currentItemClicked?.item===item}"
           v-for="item,idx in currentTaskListToShow"
           :key="item.id"
+          @mouseenter="()=>hoverState[item.id]=true"
+          @mouseleave="()=>hoverState[item.id]=false"
           draggable="true"
           @click="onClickList(item)"
           @dragstart="onDragList($event, item)"
@@ -529,7 +540,7 @@ async function expand() {
             <img :src="item.modifiedIcon || item.originalIcon" alt="" style="width: 32px;height: 32px;" />
             <span :title="item.processName" v-if="isWideMode" style="flex: 1;text-overflow: ellipsis;text-align: left; word-wrap: break-word; overflow: hidden;height:28px;width:1px">{{ item.modifiedName || item.originalName }}</span>
           </span>
-          <text-button  v-if="isWideMode && currentTaskListShowing!=='main'"  class="delete-btn" @click.stop="deleteItem(idx)">x</text-button>
+          <text-button  v-if="isWideMode && currentTaskListShowing!=='main'"  :class="{'delete-btn':!hoverState[item.id]}" @click.stop="deleteItem(idx)">x</text-button>
         </twin>
         </li>
       </ul>
@@ -592,6 +603,7 @@ async function expand() {
   display: inline-block;
   visibility: visible;
 }
+ 
 .current{
   background-color: rgb(199, 199, 199);
 }
