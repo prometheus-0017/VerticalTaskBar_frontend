@@ -4,6 +4,7 @@ import { config } from './config'
 
 let props=defineProps({
   tooltip: {
+    type: String,
     default: undefined
   }
 })

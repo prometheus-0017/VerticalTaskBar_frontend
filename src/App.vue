@@ -5,13 +5,31 @@ import Twin from './components/Twin.vue';
 import nnode from './nnode.js';
 import {getId} from './nnode.js'
 import type { Ref } from 'vue';
-import { type MessageReceiverOptions,PlainProxyManager,RunnableProxyManager,MessageReceiver,Client,asProxy,getMessageReceiver,setHostId,type ISender } from 'xuri-rpc'
+import { type MessageReceiverOptions,PlainProxyManager,RunnableProxyManager,MessageReceiver,Client,asProxy,getMessageReceiver,setHostId,type ISender, type Message } from 'xuri-rpc'
 import { WebSocketConnectionKeeper,WebSocketSender } from 'xuri-rpc'
 import { config } from './components/config'
 
+let hostId='frontend-'+getId()
+setHostId(hostId)
 
 let client=new Client()
-let sender=new WebSocketSender(new WebSocketConnectionKeeper(window.location.hostname,18765,'/',client))
+//这么写是不合适的，但是我不确定meta机制是否完善
+class SenderDecorator implements ISender{
+  sender:ISender
+  constructor(sender:ISender){
+    this.sender=sender
+  }
+  send(message: any) {
+    if(!message.meta){
+      message.meta={
+      }
+    }
+    message.meta.hostId=hostId
+    return this.sender.send(message)
+  }
+}
+let sender:ISender=new WebSocketSender(new WebSocketConnectionKeeper(window.location.hostname,18765,'/',client))
+sender=new SenderDecorator(sender)
 client.setSender(sender)
 let rpc:any=null
 async function prepareRpc(){
@@ -69,7 +87,7 @@ interface Task {
   modifiedIcon?: string;
 }
 
-interface TaskList {
+interface Group {
   id: string;
   name: string;
   scrollStatus:number;
@@ -77,15 +95,15 @@ interface TaskList {
   tasks: Task[];
 }
 
-const taskLists = ref<TaskList[]>([])
+const groups = ref<Group[]>([])
 
 // 主标签和 raw 标签是隐藏的，但 mainItems 包含所有项目
 // const mainItems = computed<Item[]>(() => {
 //   return taskLists.value.flatMap(tag => tag.tasks);
 // });
-function getListById(tagId:string){
+function getListById(tagId:string):Task[]|null{
 
-  const taskList = taskLists.value.find(t => t.id === tagId);
+  const taskList = groups.value.find(t => t.id === tagId);
   if(taskList==null){
     return null
   }
@@ -93,7 +111,7 @@ function getListById(tagId:string){
   return res
 }
 const currentTaskList=computed(() => {
-  return taskLists.value.find(t => t.id === currentTaskListShowing.value);
+  return groups.value.find(t => t.id === currentTaskListShowing.value);
 });
 
 // 过滤当前标签下的项目
@@ -128,9 +146,9 @@ function next(){
     nextTick(()=>resolve(null))
   })
 }
-let scrollContainer=ref(null);
+let scrollContainer=ref<HTMLElement>(null);
 // 点击标签切换
-async function onTagClick(tag: TaskList) {
+async function onTagClick(tag: Group) {
   let scroll=scrollContainer.value?.scrollTop
   currentTaskList.value.scrollStatus=scroll
   currentItemClicked.value={type:'tag',item:tag}
@@ -142,7 +160,7 @@ async function onTagClick(tag: TaskList) {
     hoverState[item.id]=false
   }
   await next()
-  scrollContainer.value.scrollTop=currentTaskList.value.scrollStatus
+  scrollContainer.value!.scrollTop=currentTaskList.value.scrollStatus
 }
 function exit(){
   rpc.exit()
@@ -172,7 +190,7 @@ async function setTaskName(item:Task) {
       item.modifiedName = name;
     }
 }
-async function setTagName(item:TaskList) {
+async function setTagName(item:Group) {
     let name=await prompt('请输入新名称', item.name)
     if(name===null){
       return
@@ -192,11 +210,11 @@ async function handleKeyDown(e: KeyboardEvent) {
       return
     }
     
-    const idx=taskLists.value.findIndex(item=>item.id==currentTaskListShowing.value)
+    const idx=groups.value.findIndex(item=>item.id==currentTaskListShowing.value)
     if(idx===-1){
       throw new Error('未找到任务列表')
     }
-    const list=taskLists.value
+    const list=groups.value
     currentTaskListShowing.value=list[(idx-1+list.length)%list.length].id
     list.splice(idx,1)
   }
@@ -207,13 +225,13 @@ async function handleKeyDown(e: KeyboardEvent) {
     if(currentItemClicked.value.type==='list'){
       setTaskName(currentItemClicked.value.item as Task)
     }else{
-      setTagName(currentItemClicked.value.item as TaskList)
+      setTagName(currentItemClicked.value.item as Group)
     }
     
   }
 }
 interface ItemProxy{
-  item:Task|TaskList
+  item:Task|Group
   type:'list'|'tag'
 }
 let itemDragging:ItemProxy| null=null
@@ -222,7 +240,7 @@ function onDragList(_event: DragEvent, item: Task) {
   itemDragging ={type:'list',item} 
   // event.dataTransfer?.setData('text/plain', JSON.stringify(item));
 }
-function onDragTag(_event: DragEvent, item: TaskList) {
+function onDragTag(_event: DragEvent, item: Group) {
   itemDragging ={type:'tag',item} 
   // event.dataTransfer?.setData('text/plain', JSON.stringify(item));
 }
@@ -251,17 +269,17 @@ function onDropList(_event: DragEvent, target:Task) {
 
 }
 
-function onDropTag(event: DragEvent, tag:TaskList){
+function onDropTag(event: DragEvent, tag:Group){
   if(itemDragging==null){
     return
   }
   if(itemDragging.type=='tag'){
-    let oldIndex=taskLists.value.findIndex(item=>item==itemDragging?.item)
-    const idxTo=taskLists.value.findIndex(item=>item==tag)
-    taskLists.value[oldIndex]=null
-    taskLists.value.splice(idxTo,0,itemDragging.item as TaskList);
-    oldIndex=taskLists.value.findIndex(item=>item==null)
-    taskLists.value.splice(oldIndex,1);
+    let oldIndex=groups.value.findIndex(item=>item==itemDragging?.item)
+    const idxTo=groups.value.findIndex(item=>item==tag)
+    groups.value[oldIndex]=null
+    groups.value.splice(idxTo,0,itemDragging.item as Group);
+    oldIndex=groups.value.findIndex(item=>item==null)
+    groups.value.splice(oldIndex,1);
 
     itemDragging=null
     return
@@ -282,73 +300,81 @@ function onDropTag(event: DragEvent, tag:TaskList){
   }
 
 }
-let mainTaskMap=new Map()
+let taskMap=new Map()
 async function sleep(ms:number){
   return new Promise(resolve=>{
     setTimeout(resolve,ms)
   })
 }
-async function refreshLoop(){ 
-    while(true){
-      try{
-        await refresh()
-        await sleep(500)
-      }catch(e){
-        console.log(e)
-      }
-    }
-}
+// async function refreshLoop(){ 
+//     while(true){
+//       try{
+//         await refresh()
+//         await sleep(500)
+//       }catch(e){
+//         console.log(e)
+//       }
+//     }
+// }``
 let version=0
-async function  refresh() {
-  // let res=await nnode.rpc('queryHasUpdate',[version])
-  // if(res.data==false){
-  //   return;
-  // }
-  // version=res.data
-  version=await rpc.queryHasUpdate(version)
-  let windowsList=await rpc.queryList()
-  // nnode.rpc('queryList',[])
-  const newTaskMap=new Map()
-  for (let item of windowsList){
-    newTaskMap.set(item.id,item)
-  }
-  
-  const removed=new Map()
-  for (let [id,item] of mainTaskMap){
-    if(!newTaskMap.has(id)){
-      removed.set(id,item)
-    }
-  }
 
-  for (let [id,item] of newTaskMap){
-    if(mainTaskMap.has(id)){
-      mainTaskMap.get(id).originalName=item.originalName
-      mainTaskMap.get(id).originalIcon=item.originalIcon
-    }
-  }
-
-  const added=[]
-  for (let [id,item] of newTaskMap){
-    if(!mainTaskMap.has(id)){
-      added.push(item)
-    }
-  }
-
-  for(let [_id,item] of removed){
-    mainTaskMap.delete(item.id)
-  }
-  taskLists.value.forEach(tag=>{
-      tag.tasks=tag.tasks.filter(originItem=>removed.has(originItem.id)==false)
-  })
-
-  for (let item of added){
-    mainTaskMap.set(item.id,item)
-    getListById('main')?.push(item)
-  }
-  
-  console.log(mainTaskMap)
-
+interface WindowProxyDTO{
+  processId:number
+  id:number
+  originalName:string
+  modifiedName:string
+  processName:string
+  originalIcon:string
+  modifiedIcon:string
 }
+interface WindowChangeInfo{
+  type:'add'|'change'|'delete'
+  data:WindowProxyDTO
+}
+// async function  refresh() {
+//   version=await rpc.queryHasUpdate(version)
+//   let windowsList=await rpc.queryList()
+//   const newTaskMap=new Map()
+//   for (let item of windowsList){
+//     newTaskMap.set(item.id,item)
+//   }
+  
+//   const removed=new Map()
+//   for (let [id,item] of mainTaskMap){
+//     if(!newTaskMap.has(id)){
+//       removed.set(id,item)
+//     }
+//   }
+
+//   for (let [id,item] of newTaskMap){
+//     if(mainTaskMap.has(id)){
+//       mainTaskMap.get(id).originalName=item.originalName
+//       mainTaskMap.get(id).originalIcon=item.originalIcon
+//     }
+//   }
+
+//   const added=[]
+//   for (let [id,item] of newTaskMap){
+//     if(!mainTaskMap.has(id)){
+//       added.push(item)
+//     }
+//   }
+
+//   for(let [_id,item] of removed){
+//     mainTaskMap.delete(item.id)
+//   }
+//   taskLists.value.forEach(tag=>{
+//       tag.tasks=tag.tasks.filter(originItem=>removed.has(originItem.id)==false)
+//   })
+
+//   for (let item of added){
+//     mainTaskMap.set(item.id,item)
+//     getListById('main')?.push(item)
+//   }
+  
+//   console.log(mainTaskMap)
+
+// }
 function addTaskList(){
   prompt('请输入标签名称', '').then(async name => {
     if (name === null) {
@@ -357,10 +383,10 @@ function addTaskList(){
     if (name.trim() === '') {
       return;
     }
-    taskLists.value.push({id:getId(),name,tasks:[],searchQuery:''})
+    groups.value.push({id:getId(),name,tasks:[],searchQuery:''})
   })
 }
-let globalQueryCursor:TaskList={
+let globalQueryCursor:Group={
   id:'',
   name:'',
   tasks:[],
@@ -371,7 +397,7 @@ let saveFinSign=ref('存')
 async function saveStatus(){
   let status={
     config:config,
-    taskLists:taskLists.value
+    taskLists:groups.value
   }
   if(saveInterval!==null){
     clearInterval(saveInterval)
@@ -404,7 +430,7 @@ function onDropListOver(event,item:Task){
     rpc.toTop(item.id)
   }
 }
-function onDropTagOver(event,item:TaskList){
+function onDropTagOver(event,item:Group){
   event.preventDefault()
   if(event.dataTransfer.types.includes('Files')){
     onTagClick(item)
@@ -416,19 +442,73 @@ onMounted(async () => {
   // let res=await nnode.rpc('queryList',[])
   const initData=await rpc.loadStatus()
   if(initData==null){
-    let windowList=await rpc.queryList()
-    taskLists.value.push({id:'main',name:'main',tasks:windowList,searchQuery:''})
-    mainTaskMap = new Map(windowList.map((item:Task) => [item.id, item]))
+    // let windowList=await rpc.queryList()
+    let windowList=await rpc.sync()
+    groups.value.push({id:'main',name:'main',tasks:windowList,searchQuery:''})
+    taskMap = new Map(windowList.map((item:Task) => [item.id, item]))
   }else{
-    taskLists.value=initData.taskLists
+    const initMainCopy=(initData.taskLists as Group[]).filter(x=>x.id=='main')[0].tasks.concat([]);
+    groups.value=initData.taskLists
     Object.assign(config,initData.config)
     let windowList=getListById('main')
-    mainTaskMap = new Map(windowList!.map((item:Task) => [item.id, item]))
+    taskMap = new Map(windowList!.map((item:Task) => [item.id, item]))
+    let syncData=await rpc.sync()
+    let vis=new Map()
+    for(let item of syncData){
+      let id=item.id
+      let localItem=taskMap.get(id)
+      if(!localItem){
+        taskMap.set(item.id,item)
+        getListById('main')!.push(item)
+      }else{
+        taskMap.get(id).originalName=item.originalName
+        taskMap.get(id).originalIcon=item.originalIcon
+        vis.set(id,true)
+      }
+    }
+    let removed=[];
+    for(let item of initMainCopy){
+      let id=item.id
+      if(!vis.has(id)){
+        taskMap.delete(id)
+        removed.push(item.id)
+      }
+    }
+    groups.value.forEach(tag=>{
+      tag.tasks=tag.tasks.filter(originItem=>removed.includes(originItem.id)==false)
+    })
+
     await rpc.pin(config.pin)
   }
   ready.value=true
 
-  setInterval(refresh,500)
+  await rpc.setCallback(asProxy((updateInfos:Array<WindowChangeInfo>)=>{
+    for(let updateInfo of updateInfos){
+      switch(updateInfo.type){
+        case 'add':
+          taskMap.set(updateInfo.data.id,updateInfo.data)
+          getListById('main')?.push(updateInfo.data)
+          break
+        case 'change':
+          let id=updateInfo.data.id
+          let item=updateInfo.data
+          taskMap.get(id).originalName=item.originalName
+          taskMap.get(id).originalIcon=item.originalIcon
+          break
+        case 'delete':
+          taskMap.delete(updateInfo.data.id)
+          // getListById('main')?.splice(getListById('main')?.findIndex(x=>x.id==updateInfo.data.id),1)
+          break
+      }
+    }
+    let removed=updateInfos.filter(x=>x.type=='delete').map(x=>x.data).map(x=>x.id)
+    groups.value.forEach(tag=>{
+      tag.tasks=tag.tasks.filter(originItem=>removed.includes(originItem.id)==false)
+    })
+    return '';// 返回undef不应该出发这么傻逼的报错
+  }))
+
+  // setInterval(refresh,500)
 
   window.addEventListener('keydown', handleKeyDown);
 });
@@ -444,7 +524,7 @@ function deleteItem(idx:number){
   if(currentTaskListShowing.value=='main'){
     return
   }
-  const currentTaskList=taskLists.value.find(x=>x.id==currentTaskListShowing.value)
+  const currentTaskList=groups.value.find(x=>x.id==currentTaskListShowing.value)
   currentTaskList?.tasks.splice(idx,1)
 }
 
@@ -479,8 +559,7 @@ async function expand() {
         <text-button @click="switchShouldTrim" :tooltip="shouldTrim?'当前搜索会去掉首尾空格':'当前搜索不会去掉首尾空格'">{{ shouldTrim?'修':'留' }}</text-button>
         <text-button @click="switchBtnColor" :tooltip="config.buttonColor=='green'?'当前按钮是绿色的':'当前按钮是蓝色的'">{{ config.buttonColor=='green'?'绿':'蓝' }}</text-button>
         <text-button @click="switchNightMode" :tooltip="!config.nightMode?'当前是亮色主题':'当前是暗色主题'">{{ !config.nightMode?'日':'夜' }}</text-button>
-        <text-button @click="saveStatus" :tooltip="保存当前配置">{{ saveFinSign }}</text-button>
-
+        <text-button @click="saveStatus" :tooltip="'保存当前配置'">{{ saveFinSign }}</text-button>
       </span>
 
       <text-button @click="exit" v-if="isWideMode">x</text-button>
@@ -491,7 +570,7 @@ async function expand() {
       <div v-if="isWideMode" class="scrollable-tags">
         <span @click="addTaskList">+</span>
         <span
-          v-for="tag in taskLists"
+          v-for="tag in groups"
           :key="tag.id"
           :class="{ active: tag.id === currentTaskListShowing }"
           @click="onTagClick(tag)"
@@ -508,13 +587,18 @@ async function expand() {
 
     <!-- 第2行：搜索框 -->
     <div class="row search-box" style="height: 30px;">
-      <input
-      style="width: 300px;"
-        v-if="isWideMode"
-        type="text"
-        placeholder="Filter..."
-        v-model="queryCursor!.searchQuery"
-      />
+      <div style="width: 100%;height: 100%;position: relative;padding: 0;margin: 0;">
+        <input
+        style="width: 300px;"
+          v-if="isWideMode"
+          type="text"
+          placeholder="Filter..."
+          v-model="queryCursor!.searchQuery"
+        />
+        <span 
+          class="small-button"
+          @click="queryCursor!.searchQuery=''" > x </span>
+      </div>
     </div>
 
     <!-- 第3行：列表 -->
@@ -618,5 +702,13 @@ async function expand() {
 .background-night{
   background-color: rgb(0, 0, 0);
   color:grey;
+}
+.small-button{
+  display: none;
+  position: absolute;
+  right: 2px;
+}
+.small-button:hover{
+  display: block;
 }
 </style>
