@@ -77,24 +77,7 @@ const isWideMode = ref(true);
 const currentTaskListShowing = ref('main');
 const searchQuery = ref('');
 
-// 数据模型
-interface Task {
-  id: number;
-  processName: string;
-  originalName: string;
-  modifiedName?: string;
-  originalIcon: string;
-  modifiedIcon?: string;
-}
-
-interface Group {
-  id: string;
-  name: string;
-  scrollStatus:number;
-  searchQuery: string;
-  tasks: Task[];
-}
-
+import { type Task,type Group, type editableGroup } from './components/group.js';
 const groups = ref<Group[]>([])
 
 // 主标签和 raw 标签是隐藏的，但 mainItems 包含所有项目
@@ -179,6 +162,7 @@ async function onItemDelete(item: Task) {
   }
 }
 import {onMounted, onBeforeUnmount}from 'vue';
+import EditGroup from './components/editGroup.vue';
 async function setTaskName(item:Task) {
     let name=await prompt('请输入新名称', item.modifiedName || item.originalName)
     if(name===null){
@@ -191,11 +175,17 @@ async function setTaskName(item:Task) {
     }
 }
 async function setTagName(item:Group) {
-    let name=await prompt('请输入新名称', item.name)
-    if(name===null){
+    let result=await editGroup(item as editableGroup);
+    //  prompt('请输入新名称', item.name)
+    if(result==null){
+      return
+    }
+    let name=result.name
+    if(name===null||name===''){
       return
     }
     item.name=name;
+    item.captureConditions=result.captureConditions
 }
 // 编辑名称（F2）
 async function handleKeyDown(e: KeyboardEvent) {
@@ -219,6 +209,7 @@ async function handleKeyDown(e: KeyboardEvent) {
     list.splice(idx,1)
   }
   if (e.key === 'F2') {
+    
     if(currentItemClicked.value==null){
       return
     }
@@ -488,6 +479,32 @@ onMounted(async () => {
         case 'add':
           taskMap.set(updateInfo.data.id,updateInfo.data)
           getListById('main')?.push(updateInfo.data)
+          debugger
+          for(let group of groups.value){
+            if(group.id=='main'){
+              continue
+            }
+            for(let condition of group.captureConditions){
+              let val=null
+              if(condition.type=='name'){
+                //todo 你他妈的远程哪有modify？
+                val=updateInfo.data.modifiedName
+              }else if(condition.type=='originName'){
+                val=updateInfo.data.originalName
+              }else if(condition.type=='pwd'){
+                val=updateInfo.data.pwd
+              }else{
+                console.warn('未知的condition.type')
+              }
+              if(val!=null && 
+                  condition.value!='' &&
+                  val.toLowerCase().includes(condition.value.toLowerCase())){
+                group.tasks.push(updateInfo.data)
+                break;
+              }
+            }
+
+          }
           break
         case 'change':
           let id=updateInfo.data.id
@@ -511,6 +528,9 @@ onMounted(async () => {
   // setInterval(refresh,500)
 
   window.addEventListener('keydown', handleKeyDown);
+  setInterval(()=>{
+    rpc.echo()
+  },500)
 });
 async function onClickList(item){
   currentItemClicked.value={type:'list',item}
@@ -545,6 +565,48 @@ async function collapse() {
 }
 async function expand() {
   await rpc.expand()
+}
+
+const showModal = ref(false);
+const editData = ref<editableGroup>({name:'',captureConditions:[]});
+const onGroupCancel = () => { 
+  if(editGroupReject){
+    editGroupReject()
+  }else{
+    console.log("?")
+  }
+}
+const onGroupSubmit = (data: editableGroup) => {
+  if(editGtoupResolve){
+    editGtoupResolve(data)
+  }else{
+    console.log("?")
+  }
+}
+let editGtoupResolve:((g:editableGroup)=>void)|null=null;
+let editGroupReject:(()=>void)|null=null;
+async function editGroup(oldData?:editableGroup){
+  if(oldData==null){
+    oldData={
+      name:'',
+      captureConditions:[]
+    }
+  }
+  editData.value=oldData
+  showModal.value = true;
+  let editGroupPromise:Promise<editableGroup>=new Promise((resolve,reject)=>{
+    editGtoupResolve=resolve
+    editGroupReject=reject
+  })
+  
+  try{
+    let result=await editGroupPromise;
+    return result
+  }catch(e){
+    return null
+  }finally{
+    showModal.value=false;
+  }
 }
 </script>
 
@@ -629,6 +691,12 @@ async function expand() {
         </li>
       </ul>
     </div>
+    <EditGroup 
+      v-if="showModal"
+      :initial-data="editData"
+      @cancel="onGroupCancel"
+      @submit="onGroupSubmit"
+    />
   </div>
 </template>
 
