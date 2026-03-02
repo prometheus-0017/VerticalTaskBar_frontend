@@ -484,7 +484,7 @@ onMounted(async () => {
             if(group.id=='main'){
               continue
             }
-            for(let condition of group.captureConditions){
+            for(let condition of group.captureConditions||[]){
               let val=null
               if(condition.type=='name'){
                 //todo 你他妈的远程哪有modify？
