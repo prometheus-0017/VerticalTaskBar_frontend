@@ -418,7 +418,7 @@ function onDropListOver(event,item:Task){
   event.preventDefault();
   if(event.dataTransfer.types.includes('Files')){
     // nnode.rpc('toTop',[item.id])
-    rpc.toTop(item.id)
+    rpc.toTop(item.id,item.system)
   }
 }
 function onDropTagOver(event,item:Group){
@@ -534,7 +534,7 @@ onMounted(async () => {
 });
 async function onClickList(item){
   currentItemClicked.value={type:'list',item}
-  rpc.toTop(item.id)
+  rpc.toTop(item.id,item.system)
   // await nnode.rpc('toTop',[item.id])
 }
 //tmd li:hover btn not effiect
