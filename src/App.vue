@@ -454,6 +454,9 @@ onMounted(async () => {
       }else{
         taskMap.get(id).originalName=item.originalName
         taskMap.get(id).originalIcon=item.originalIcon
+        // 先这么办但是我觉得不适这么给事情，chrome 插件重启systemid会变化，结果这里还没有判system按道理task的id应该就足够是唯一的但是totop机制又让id从外部生成可能后续接入的system应该改这个id来源
+        console.log('replace',taskMap.get(id).system,item.system)
+        taskMap.get(id).system=item.system
         vis.set(id,true)
       }
     }
@@ -479,7 +482,6 @@ onMounted(async () => {
         case 'add':
           taskMap.set(updateInfo.data.id,updateInfo.data)
           getListById('main')?.push(updateInfo.data)
-          debugger
           for(let group of groups.value){
             if(group.id=='main'){
               continue
