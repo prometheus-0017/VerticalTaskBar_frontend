@@ -644,7 +644,7 @@ async function editGroup(oldData?:editableGroup){
         <text-button @click="switchShouldTrim" :tooltip="shouldTrim?'当前搜索会去掉首尾空格':'当前搜索不会去掉首尾空格'">{{ shouldTrim?'修':'留' }}</text-button>
         <text-button @click="switchBtnColor" :tooltip="config.buttonColor=='green'?'当前按钮是绿色的':'当前按钮是蓝色的'">{{ config.buttonColor=='green'?'绿':'蓝' }}</text-button>
         <text-button @click="switchNightMode" :tooltip="!config.nightMode?'当前是亮色主题':'当前是暗色主题'">{{ !config.nightMode?'日':'夜' }}</text-button>
-        <text-button @click="switchAddToCurrentGroup" :tooltip="!config.addToCurrentGroup?'当前会追加到当前目录':'当前不追加到当前目录'">{{ !config.nightMode?'追':'无' }}</text-button>
+        <text-button @click="switchAddToCurrentGroup" :tooltip="config.addToCurrentGroup?'当前会追加到当前目录':'当前不追加到当前目录'">{{ config.addToCurrentGroup?'追':'无' }}</text-button>
 
         <text-button @click="saveStatus" :tooltip="'保存当前配置'">{{ saveFinSign }}</text-button>
       </span>
