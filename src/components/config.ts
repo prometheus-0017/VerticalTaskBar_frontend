@@ -4,5 +4,6 @@ export let config=reactive({
   nightMode:false,
   shouldTrim:false,
   globalQuery:false,
+  addToCurrentGroup:true,
   pin:false,
 })
