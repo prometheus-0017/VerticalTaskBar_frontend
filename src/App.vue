@@ -171,6 +171,26 @@ async function onItemDelete(item: Task) {
 }
 import {onMounted, onBeforeUnmount}from 'vue';
 import EditGroup from './components/editGroup.vue';
+async function onRightClick(item:Task,e:MouseEvent){
+  if(e.shiftKey){
+    removeAfter(item)
+  }else{
+    setTaskName(item)
+  }
+}
+async function removeAfter(item:Task){
+  if(currentTaskListShowing.value=='main'){
+    return 
+  }
+  if(!await confirm('确定要删除所有后续项吗？')){
+    return 
+  }
+  let idx=currentTaskList.value!.tasks.findIndex(i=>i.id===item.id)
+  if(idx===-1){
+    return
+  }
+  currentTaskList.value!.tasks.splice(idx+1,2147483647)
+}
 async function setTaskName(item:Task) {
     let name=await prompt('请输入新名称', item.modifiedName || item.originalName)
     if(name===null){
@@ -701,7 +721,7 @@ async function editGroup(oldData?:editableGroup){
           @click="onClickList(item)"
           @dragstart="onDragList($event, item)"
           @drop="onDropList($event, item)"
-          @contextmenu.prevent="setTaskName(item)"
+          @contextmenu.prevent="onRightClick(item,$event)"
           @dragover="onDropListOver($event, item)"
           style="width: 100%;"
           :data-item-id="item.id"
