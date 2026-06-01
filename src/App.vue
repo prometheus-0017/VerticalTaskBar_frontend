@@ -714,7 +714,7 @@ async function editGroup(oldData?:editableGroup){
         <li
           :class="{current: currentItemClicked?.item===item}"
           v-for="item,idx in currentTaskListToShow"
-          :key="item.id"
+          :key="item.id+'%'+item.system"
           @mouseenter="()=>hoverState[item.id]=true"
           @mouseleave="()=>hoverState[item.id]=false"
           draggable="true"

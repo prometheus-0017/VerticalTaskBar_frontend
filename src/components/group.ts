@@ -11,6 +11,7 @@ export interface Group {
 export interface Task {
   id: number;
   pwd:string;
+  system:string;
   processName: string;
   originalName: string;
   modifiedName?: string;
