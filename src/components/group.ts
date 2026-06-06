@@ -10,13 +10,14 @@ export interface Group {
 // 数据模型
 export interface Task {
   id: number;
-  pwd:string;
   system:string;
+  pwd:string;
+  processId?:number
   processName: string;
   originalName: string;
-  modifiedName?: string;
+  modifiedName: string|null;
   originalIcon: string;
-  modifiedIcon?: string;
+  modifiedIcon: string|null;
 }
 // 类型定义
 interface CaptureCondition {

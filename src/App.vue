@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, reactive } from 'vue';
+import { ref, computed, nextTick } from 'vue';
 import TextButton from './components/TextButton.vue';
 import Twin from './components/Twin.vue';
-import nnode from './nnode.js';
 import {getId} from './nnode.js'
 import type { Ref } from 'vue';
-import { type MessageReceiverOptions,PlainProxyManager,RunnableProxyManager,MessageReceiver,Client,asProxy,getMessageReceiver,setHostId,type ISender, type Message } from 'xuri-rpc'
+import { Client,asProxy,setHostId,type ISender } from 'xuri-rpc'
 import { WebSocketConnectionKeeper,WebSocketSender } from 'xuri-rpc'
 import { config } from './components/config'
 
@@ -101,8 +100,12 @@ function getListById(tagId:string):Task[]|null{
   let res=taskList.tasks
   return res
 }
-const currentTaskList=computed(() => {
-  return groups.value.find(t => t.id === currentTaskListShowing.value);
+const currentTaskList=computed<Group>(() => {
+  let res=groups.value.find(t => t.id === currentTaskListShowing.value);
+  if(!res){
+    res=groups.value[0]
+  }
+  return res
 });
 
 // 过滤当前标签下的项目
@@ -137,11 +140,13 @@ function next(){
     nextTick(()=>resolve(null))
   })
 }
-let scrollContainer=ref<HTMLElement>(null);
+let scrollContainer=ref<HTMLElement|null>(null);
 // 点击标签切换
 async function onTagClick(tag: Group) {
   let scroll=scrollContainer.value?.scrollTop
-  currentTaskList.value.scrollStatus=scroll
+  if(scroll!==undefined){
+    currentTaskList.value!.scrollStatus=scroll
+  }
   currentItemClicked.value={type:'tag',item:tag}
   currentTaskListShowing.value = tag.id;
   for(let item of tag.tasks){
@@ -157,18 +162,18 @@ function exit(){
   rpc.exit()
 }
 // 删除项
-async function onItemDelete(item: Task) {
-  if(currentTaskListShowing.value=='main'){
-    return
-  }
-  const confirmed = await confirm(`确定删除 ${item.modifiedName || item.originalName}?`);
-  if (confirmed) {
-    const taskList = getListById(currentTaskListShowing.value)
-    if (taskList) {
-      taskList.tasks = taskList.tasks.filter(i => i.id !== item.id);
-    }
-  }
-}
+// async function onItemDelete(item: Task) {
+//   if(currentTaskListShowing.value=='main'){
+//     return
+//   }
+//   const confirmed = await confirm(`确定删除 ${item.modifiedName || item.originalName}?`);
+//   if (confirmed) {
+//     const taskList = getListById(currentTaskListShowing.value)
+//     if (taskList) {
+//       taskList.tasks = taskList.tasks.filter(i => i.id !== item.id);
+//     }
+//   }
+// }
 import {onMounted, onBeforeUnmount}from 'vue';
 import EditGroup from './components/editGroup.vue';
 async function onRightClick(item:Task,e:MouseEvent){
@@ -275,7 +280,7 @@ function onDropList(_event: DragEvent, target:Task) {
   }
 
   const source:Task=itemDragging.item as Task;
-  const taskList:Array<Task>=getListById(currentTaskListShowing.value) as Array<Task>;
+  const taskList:Array<Task|null>=getListById(currentTaskListShowing.value) as Array<Task>;
   if(taskList==null){
     throw 'impossible'
   }
@@ -317,14 +322,18 @@ function onDropTag(event: DragEvent, tag:Group){
 
     return
   }
-
 }
-let taskMap=new Map()
-async function sleep(ms:number){
-  return new Promise(resolve=>{
-    setTimeout(resolve,ms)
-  })
+type fullId=string
+type taskId=number
+function mkFullId(id:taskId,sys:string):fullId{
+  return `${sys}%${id}`
 }
+let taskMap:Map<fullId,Task>=new Map()
+// async function sleep(ms:number){
+//   return new Promise(resolve=>{
+//     setTimeout(resolve,ms)
+//   })
+// }
 // async function refreshLoop(){ 
 //     while(true){
 //       try{
@@ -335,20 +344,11 @@ async function sleep(ms:number){
 //       }
 //     }
 // }``
-let version=0
+// let version=0
 
-interface WindowProxyDTO{
-  processId:number
-  id:number
-  originalName:string
-  modifiedName:string
-  processName:string
-  originalIcon:string
-  modifiedIcon:string
-}
 interface WindowChangeInfo{
   type:'add'|'change'|'delete'
-  data:WindowProxyDTO
+  data:Task
 }
 // async function  refresh() {
 //   version=await rpc.queryHasUpdate(version)
@@ -402,13 +402,22 @@ function addTaskList(){
     if (name.trim() === '') {
       return;
     }
-    groups.value.push({id:getId(),name,tasks:[],searchQuery:''})
+    groups.value.push({
+      id:getId(),
+      name,
+      tasks:[],
+      searchQuery:'',
+      scrollStatus:0,
+      captureConditions:[]
+    })
   })
 }
 let globalQueryCursor:Group={
   id:'',
   name:'',
   tasks:[],
+  scrollStatus:0,
+  captureConditions:[],
   searchQuery:''
 }
 let saveInterval:number|null=null;
@@ -442,16 +451,16 @@ function switchGlobalSearchQuery(){
   config.globalQuery=!globalQuery.value
 }
 
-function onDropListOver(event,item:Task){
+function onDropListOver(event:DragEvent,item:Task){
   event.preventDefault();
-  if(event.dataTransfer.types.includes('Files')){
+  if(event.dataTransfer?.types.includes('Files')){
     // nnode.rpc('toTop',[item.id])
     rpc.toTop(item.id,item.system)
   }
 }
-function onDropTagOver(event,item:Group){
+function onDropTagOver(event:DragEvent,item:Group){
   event.preventDefault()
-  if(event.dataTransfer.types.includes('Files')){
+  if(event.dataTransfer?.types.includes('Files')){
     onTagClick(item)
   }
 }
@@ -463,33 +472,41 @@ onMounted(async () => {
   if(initData==null){
     // let windowList=await rpc.queryList()
     let windowList=await rpc.sync()
-    groups.value.push({id:'main',name:'main',tasks:windowList,searchQuery:''})
+    groups.value.push({
+      id:'main',
+      name:'main',
+      tasks:windowList,
+      searchQuery:'',
+      scrollStatus:0,
+      captureConditions:[]
+    })
     taskMap = new Map(windowList.map((item:Task) => [item.id, item]))
   }else{
     const initMainCopy=(initData.taskLists as Group[]).filter(x=>x.id=='main')[0].tasks.concat([]);
     groups.value=initData.taskLists
     Object.assign(config,initData.config)
     let windowList=getListById('main')
-    taskMap = new Map(windowList!.map((item:Task) => [item.id, item]))
+    taskMap = new Map(windowList!.map((item:Task) => [mkFullId(item.id,item.system), item]))
     let syncData=await rpc.sync()
-    let vis=new Map()
-    for(let item of syncData){
+    let vis:Map<fullId,boolean>=new Map()
+    for(let _item of syncData){
+      let item:Task=_item
       let id=item.id
-      let localItem=taskMap.get(id)
+      let localItem=taskMap.get(mkFullId(id,item.system))
       if(!localItem){
-        taskMap.set(item.id,item)
+        taskMap.set(mkFullId(id,item.system),item)
         getListById('main')!.push(item)
       }else{
-        taskMap.get(id).originalName=item.originalName
-        taskMap.get(id).originalIcon=item.originalIcon
+        localItem.originalName=item.originalName
+        localItem.originalIcon=item.originalIcon
         // 先这么办但是我觉得不适这么给事情，chrome 插件重启systemid会变化，结果这里还没有判system按道理task的id应该就足够是唯一的但是totop机制又让id从外部生成可能后续接入的system应该改这个id来源
-        taskMap.get(id).system=item.system
-        vis.set(id,true)
+        localItem.system=item.system
+        vis.set(mkFullId(id,localItem.system),true)
       }
     }
     let removed=[];
     for(let item of initMainCopy){
-      let id=item.id
+      let id=mkFullId(item.id,item.system)
       if(!vis.has(id)){
         taskMap.delete(id)
         removed.push(item.id)
@@ -507,7 +524,7 @@ onMounted(async () => {
     for(let updateInfo of updateInfos){
       switch(updateInfo.type){
         case 'add':
-          taskMap.set(updateInfo.data.id,updateInfo.data)
+          taskMap.set(mkFullId(updateInfo.data.id,updateInfo.data.system),updateInfo.data)
           getListById('main')?.push(updateInfo.data)
           for(let group of groups.value){
             if(group.id=='main'){
@@ -552,11 +569,16 @@ onMounted(async () => {
         case 'change':
           let id=updateInfo.data.id
           let item=updateInfo.data
-          taskMap.get(id).originalName=item.originalName
-          taskMap.get(id).originalIcon=item.originalIcon
+          let task=taskMap.get(mkFullId(id,updateInfo.data.system))
+          if(!task){
+            console.warn('taskMap.get(id)==null')
+          }else{
+            task.originalName=item.originalName
+            task.originalIcon=item.originalIcon
+          }
           break
         case 'delete':
-          taskMap.delete(updateInfo.data.id)
+          taskMap.delete(mkFullId(updateInfo.data.id,updateInfo.data.system))
           // getListById('main')?.splice(getListById('main')?.findIndex(x=>x.id==updateInfo.data.id),1)
           break
       }
@@ -575,7 +597,7 @@ onMounted(async () => {
     rpc.echo()
   },500)
 });
-async function onClickList(item){
+async function onClickList(item:Task){
   currentItemClicked.value={type:'list',item}
   rpc.toTop(item.id,item.system)
   // await nnode.rpc('toTop',[item.id])
