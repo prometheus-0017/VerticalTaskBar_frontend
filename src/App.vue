@@ -190,11 +190,20 @@ async function removeAfter(item:Task){
   if(!await confirm('确定要删除所有后续项吗？')){
     return 
   }
-  let idx=currentTaskList.value!.tasks.findIndex(i=>i.id===item.id)
+  let idx=currentTaskList.value!.tasks.findIndex(i=>taskEqual(i,item))
   if(idx===-1){
     return
   }
   currentTaskList.value!.tasks.splice(idx+1,2147483647)
+}
+function taskEqual(a:Task|null|undefined,b:Task|null|undefined){
+  if(a==null&&b==null){
+    return true
+  }
+  if(a==null||b==null){
+    return false
+  }
+  return mkFullId(a.id,a.system) == mkFullId(b.id,b.system)
 }
 async function setTaskName(item:Task) {
     let name=await prompt('请输入新名称', item.modifiedName || item.originalName)
@@ -310,7 +319,7 @@ function onDropTag(event: DragEvent, tag:Group){
   }
   if(itemDragging.type=='list'){
     const list=tag.tasks
-    const idx=list.findIndex(item=>item==itemDragging?.item)
+    const idx=list.findIndex(item=>taskEqual(item,itemDragging?.item as Task))
 
     if(idx!==-1){
       itemDragging=null
@@ -734,9 +743,9 @@ async function editGroup(oldData?:editableGroup){
     <div class="row list-container" style="flex:1;display: flex;overflow: auto;" ref="scrollContainer">
       <ul class="item-list" :class="{ wide: isWideMode }" style="padding:0;flex:1">
         <li
-          :class="{current: currentItemClicked?.item===item}"
+          :class="{current: taskEqual(currentItemClicked?.item as Task,item)}"
           v-for="item,idx in currentTaskListToShow"
-          :key="item.id+'%'+item.system"
+          :key="mkFullId(item.id,item.system)"
           @mouseenter="()=>hoverState[item.id]=true"
           @mouseleave="()=>hoverState[item.id]=false"
           draggable="true"
