@@ -7,6 +7,8 @@
       <div class="form-group">
         <label class="form-label" style="text-align: left;">名称</label>
         <input 
+        ref="input"
+        @keydown.enter.prevent="submit"
           v-model="formData.name" 
           type="text" 
           class="form-input" 
@@ -52,11 +54,13 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, type Ref } from 'vue';
 import TextButton from './TextButton.vue';
 
 
 import { type editableGroup as EditableGroup } from './group';
+
+let input:Ref<null|HTMLElement>=ref(null)
 
 // Props & Emits
 const props = defineProps<{
@@ -96,6 +100,8 @@ onMounted(()=>{
     name: props.initialData?.name || '',
     captureConditions: JSON.parse(JSON.stringify(props.initialData!.captureConditions||[]))
   }
+  input.value?.focus()
+
 });
 
 const removeItem = (index: number) => {
