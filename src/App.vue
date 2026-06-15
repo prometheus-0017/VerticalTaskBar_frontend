@@ -844,8 +844,8 @@ async function editGroup(oldData?:editableGroup){
   color:black;
 }
 .background-night{
-  background-color: rgb(0, 0, 0);
-  color:grey;
+  background-color: rgb(27, 27, 27);
+  color:rgb(179, 178, 178);
 }
 .small-button{
   display: none;
