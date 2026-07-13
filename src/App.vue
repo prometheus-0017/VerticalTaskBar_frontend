@@ -4,10 +4,9 @@ import TextButton from './components/TextButton.vue';
 import Twin from './components/Twin.vue';
 import {getId} from './nnode.js'
 import type { Ref } from 'vue';
-import { Client,asProxy,setHostId,type ISender } from 'xuri-rpc'
-import { WebSocketConnectionKeeper,WebSocketSender } from 'xuri-rpc'
+import { Client,asProxy } from 'xuri-rpc'
 import { config } from './components/config'
-
+/*
 let hostId='frontend-'+getId()
 setHostId(hostId)
 
@@ -33,6 +32,16 @@ client.setSender(sender)
 let rpc:any=null
 async function prepareRpc(){
   rpc=await client.getObject('rpc')
+}
+  */
+let client:Client|null=null;
+let rpc:any=null;
+import { createMain } from '@xuri-rpc/websocket-sender';
+async function prepareRpc(){
+  let _main=null;
+  [client,_main]=await createMain('frontend-'+getId(),window.location.hostname,18765,'/')
+  rpc=await client.getObject('rpc')
+  // rpc=asProxy(client)
 }
 
 let shouldTrim=computed(() => {
@@ -508,6 +517,8 @@ onMounted(async () => {
       }else{
         localItem.originalName=item.originalName
         localItem.originalIcon=item.originalIcon
+        //先这样吧,正常应该icon持久化,但是好像realtime的icon会变化
+        localItem.modifiedIcon=item.originalIcon
         // 先这么办但是我觉得不适这么给事情，chrome 插件重启systemid会变化，结果这里还没有判system按道理task的id应该就足够是唯一的但是totop机制又让id从外部生成可能后续接入的system应该改这个id来源
         localItem.system=item.system
         vis.set(mkFullId(id,localItem.system),true)
@@ -521,15 +532,24 @@ onMounted(async () => {
         removed.push(item.id)
       }
     }
+    //byd 反序列化之前这个item其实是有引用构成的一个有向无环图的，但是序列化的时候把它完全展开了。导致tag里的item变成了一个副本。
     groups.value.forEach(tag=>{
-      tag.tasks=tag.tasks.filter(originItem=>removed.includes(originItem.id)==false)
+      const originTask=tag.tasks
+      tag.tasks=[]
+      for(let item of originTask){
+        const localItem=taskMap.get(mkFullId(item.id,item.system))
+        if(localItem){
+          tag.tasks.push(localItem)
+        }
+      }
+      // tag.tasks=tag.tasks.filter(originItem=>removed.includes(originItem.id)==false)
     })
 
     await rpc.pin(config.pin)
   }
   ready.value=true
 
-  await rpc.setCallback(asProxy((updateInfos:Array<WindowChangeInfo>)=>{
+  await rpc.setCallback((updateInfos:Array<WindowChangeInfo>)=>{
     for(let updateInfo of updateInfos){
       switch(updateInfo.type){
         case 'add':
@@ -597,7 +617,7 @@ onMounted(async () => {
       tag.tasks=tag.tasks.filter(originItem=>removed.includes(originItem.id)==false)
     })
     return '';// 返回undef不应该出发这么傻逼的报错
-  }))
+  })
 
   // setInterval(refresh,500)
 
