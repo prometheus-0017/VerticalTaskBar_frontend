@@ -40,9 +40,9 @@
           </div>
       </div>
       <!-- 列表面板 -->
-      <div class="list-section">
+      <!-- <div class="list-section">
         
-      </div>
+      </div> -->
 
       <!-- 操作按钮 -->
       <div class="modal-actions">
@@ -128,7 +128,7 @@ const removeItem = (index: number) => {
 
 /* 弹窗内容 */
 .modal-content {
-  background: #fff;
+  background:  var(--background-color);
   width: 100%;
   max-width: 280px; /* 适配300px容器 */
   border-radius: 8px;
@@ -141,7 +141,7 @@ const removeItem = (index: number) => {
   margin: 0 0 16px;
   font-size: 16px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-color);
   text-align: center;
 }
 

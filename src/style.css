@@ -64,6 +64,61 @@ button:focus-visible {
   text-align: center;
 }
 
+
+/* 1. 默认浅色模式变量（作为基础兜底） */
+:root {
+  --background-color: #e3e3e3;
+  --text-color: #000000;
+  --highlight-color: #f1f1f1;
+  --button-highlight-color: #dcdcdc;
+  color-scheme: light dark; /* 让浏览器原生控件适配 */
+}
+
+/* 2. 强制暗黑模式：当 Vue 给 <html> 加上 .dark 类时生效 */
+html.dark {
+  --background-color: #333333;
+  --text-color: rgba(255, 255, 255, 0.938);
+  --highlight-color: #4c4c4c;
+  --button-highlight-color: #5C5C5C;
+
+}
+
+/* 3. 强制浅色模式：当 Vue 给 <html> 加上 .light 类时生效 */
+html.light {
+  --background-color: #e3e3e3;
+  --text-color: #000000;
+  --highlight-color: #f1f1f1;
+  --button-highlight-color: #dcdcdc;
+
+}
+
+/* 4. 跟随系统模式：当没有 .dark 或 .light 类时，由系统偏好决定 */
+@media (prefers-color-scheme: dark) {
+  :root:not(.dark):not(.light) {
+    --background-color: #333333;
+    --text-color: rgba(255, 255, 255, 0.938);
+    --highlight-color: #4c4c4c;
+    --button-highlight-color: #5C5C5C;
+
+  }
+}
+
+/* 定义默认颜色变量 */
+/* :root {
+   --background-color: #e3e3e3;
+   --text-color: #black;
+   --highlight-color: #f1f1f1;
+   --button-highlight-color: #FFFFFF33;
+} */
+/* 暗黑模式变量 */
+/* @media (prefers-color-scheme: dark) {
+   :root {
+      --background-color: #333333;
+      --text-color: rgba(255, 255, 255, 0.938);
+      --highlight-color: #4c4c4c;
+   }
+} */
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;

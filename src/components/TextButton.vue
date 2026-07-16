@@ -12,7 +12,7 @@ let props=defineProps({
 </script>
 
 <template>
-  <span class="my-button" :class="{green:config.buttonColor=='green',blue:config.buttonColor=='blue'}" :title="tooltip"><slot></slot></span>
+  <span class="new-button" :title="tooltip"><slot></slot></span>
 </template>
 
 <style scoped>
@@ -21,6 +21,27 @@ let props=defineProps({
   width: 30px;
   height: 30px;
   display: inline-block;
+}
+
+@font-face { 
+  font-family: "SmileySans-Oblique";
+  src: url("@/assets/fonts/SmileySans-Oblique.otf.woff2");
+  font-weight: normal;
+font-style: normal;
+}
+
+.new-button{
+  padding-top: 2px;
+  width: 30px;
+  color:var(--text-color);
+  height: 30px;
+  background-color: #00000000;
+  display: inline-block;
+  border-radius: 5px;
+  font-family: "SmilySans-Oblique";
+}
+.new-button:hover{
+  background-color:var(--button-highlight-color);
 }
 .blue{
   color: white;

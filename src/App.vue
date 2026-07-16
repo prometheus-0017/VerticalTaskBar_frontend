@@ -59,11 +59,9 @@ function switchBtnColor(){
   }
 }
 function switchNightMode(){
-  if(config.nightMode){
-    config.nightMode=false
-  }else{
-    config.nightMode=true
-  }
+  const seq=['light','dark','system']
+  config.nightMode=seq[(seq.indexOf(config.nightMode)+1)%seq.length]
+  applyTheme(config.nightMode)
 }
 function switchAddToCurrentGroup(){
   if(config.addToCurrentGroup){
@@ -82,10 +80,7 @@ function confirm(message: string): Promise<boolean> {
   });
 }
 function prompt(message: string, defaultValue = ''): Promise<string | null> {
-  return new Promise((resolve) => {
-    const result = window.prompt(message, defaultValue);
-    resolve(result);
-  });
+  return textInput(message, defaultValue);
 }
 
 // ===== 状态定义 ===== 
@@ -185,6 +180,7 @@ function exit(){
 // }
 import {onMounted, onBeforeUnmount}from 'vue';
 import EditGroup from './components/editGroup.vue';
+import TextInput from './components/TextInput.vue';
 async function onRightClick(item:Task,e:MouseEvent){
   if(e.shiftKey){
     removeAfter(item)
@@ -310,6 +306,24 @@ function onDropList(_event: DragEvent, target:Task) {
   taskList.splice(idxOld,1);
 
 }
+type NightMode='system'|'light'|'dark'
+// 应用主题的核心函数
+const applyTheme = (theme:NightMode) => {
+  const root = document.documentElement;
+  
+  // 先清除可能存在的旧主题类
+  root.classList.remove('dark', 'light');
+  
+  if (theme === 'dark') {
+    root.classList.add('dark');
+  } else if (theme === 'light') {
+    root.classList.add('light');
+  }
+  // 如果是 'system'，则不加任何类，让 CSS 的 @media 查询自动接管
+  
+  // currentTheme.value = theme;
+  // localStorage.setItem('theme-preference', theme);
+};
 
 function onDropTag(event: DragEvent, tag:Group){
   if(itemDragging==null){
@@ -679,6 +693,32 @@ const onGroupSubmit = (data: editableGroup) => {
 }
 let editGtoupResolve:((g:editableGroup)=>void)|null=null;
 let editGroupReject:(()=>void)|null=null;
+
+// TextInput modal state
+const showTextInput = ref(false);
+const textInputProps = ref({ title: '', defaultValue: '', placeholder: '' });
+let textInputResolve: ((value: string | null) => void) | null = null;
+function textInput(title: string, defaultValue = '', placeholder = '请输入'): Promise<string | null> {
+  textInputProps.value = { title, defaultValue, placeholder };
+  showTextInput.value = true;
+  return new Promise((resolve) => {
+    textInputResolve = resolve;
+  });
+}
+const onTextInputCancel = () => {
+  if (textInputResolve) {
+    textInputResolve(null);
+    textInputResolve = null;
+  }
+  showTextInput.value = false;
+};
+const onTextInputSubmit = (value: string) => {
+  if (textInputResolve) {
+    textInputResolve(value);
+    textInputResolve = null;
+  }
+  showTextInput.value = false;
+};
 async function editGroup(oldData?:editableGroup){
   if(oldData==null){
     oldData={
@@ -705,7 +745,7 @@ async function editGroup(oldData?:editableGroup){
 </script>
 
 <template>
-  <div class="component-container" :class="{ narrow: !isWideMode,'background-night':config.nightMode,'background':!config.nightMode }"  @drop.prevent="()=>{console.log('hhhh')}" v-if="ready">
+  <div class="component-container" :class="{ narrow: !isWideMode,'background':true }"  @drop.prevent="()=>{console.log('hhhh')}" v-if="ready">
     <!-- 第0行：按钮 -->
     <twin style="height: 30px;">
       <span>
@@ -713,8 +753,7 @@ async function editGroup(oldData?:editableGroup){
         <text-button @click="togglePin" :tooltip="pin?'当前鼠标移出后任务栏不会自动收回':'当前鼠标移出后任务栏会自动收回'">{{ pin?'定':'动' }}</text-button>
         <text-button @click="switchGlobalSearchQuery" :tooltip="globalQuery?'当前任务栏共用一个搜索条件':'当前每个任务栏使用独立的搜索条件'">{{ globalQuery?'共':'单' }}</text-button>
         <text-button @click="switchShouldTrim" :tooltip="shouldTrim?'当前搜索会去掉首尾空格':'当前搜索不会去掉首尾空格'">{{ shouldTrim?'修':'留' }}</text-button>
-        <text-button @click="switchBtnColor" :tooltip="config.buttonColor=='green'?'当前按钮是绿色的':'当前按钮是蓝色的'">{{ config.buttonColor=='green'?'绿':'蓝' }}</text-button>
-        <text-button @click="switchNightMode" :tooltip="!config.nightMode?'当前是亮色主题':'当前是暗色主题'">{{ !config.nightMode?'日':'夜' }}</text-button>
+        <text-button @click="switchNightMode" :tooltip="{light:'当前是亮色主题',dark:'当前是暗色主题',system:'主题当前跟随系统'}[config.nightMode]">{{ {light:'日',dark:'夜',system:'随'}[config.nightMode] }}</text-button>
         <text-button @click="switchAddToCurrentGroup" :tooltip="config.addToCurrentGroup?'当前会追加到当前目录':'当前不追加到当前目录'">{{ config.addToCurrentGroup?'追':'无' }}</text-button>
 
         <text-button @click="saveStatus" :tooltip="'保存当前配置'">{{ saveFinSign }}</text-button>
@@ -760,7 +799,7 @@ async function editGroup(oldData?:editableGroup){
     </div>
 
     <!-- 第3行：列表 -->
-    <div class="row list-container" style="flex:1;display: flex;overflow: auto;" ref="scrollContainer">
+    <div class="row list-container" style="flex:1;display: flex;overflow-x: hidden;overflow-y: auto;" ref="scrollContainer">
       <ul class="item-list" :class="{ wide: isWideMode }" style="padding:0;flex:1">
         <li
           :class="{current: taskEqual(currentItemClicked?.item as Task,item)}"
@@ -777,12 +816,10 @@ async function editGroup(oldData?:editableGroup){
           style="width: 100%;"
           :data-item-id="item.id"
         >
-        <twin style="width: 100%;">
-          <span style="display: flex;flex:1">
-            <img :src="item.modifiedIcon || item.originalIcon" alt="" style="width: 32px;height: 32px;" />
-            <span :title="item.processName" v-if="isWideMode" style="flex: 1;text-overflow: ellipsis;text-align: left; word-wrap: break-word; overflow: hidden;height:28px;width:1px">{{ item.modifiedName || item.originalName }}</span>
-          </span>
-          <text-button  v-if="isWideMode && currentTaskListShowing!=='main'"  :class="{'delete-btn':!hoverState[item.id]}" @click.stop="deleteItem(idx)">x</text-button>
+        <twin style="width: 100%; gap: 8px; align-items: center;">
+          <img v-if="isWideMode" :src="item.modifiedIcon || item.originalIcon" alt="" style="width: 24px;height: 24px;flex-shrink: 0;" />
+          <span :title="item.processName" v-if="isWideMode" style="flex: 1;text-overflow: ellipsis;text-align: left; word-wrap: break-word; overflow: hidden;height:28px;width:1px">{{ item.modifiedName || item.originalName }}</span>
+          <text-button  v-show="isWideMode && currentTaskListShowing!=='main'"  :class="{'delete-btn':!hoverState[item.id]}" @click.stop="deleteItem(idx)">x</text-button>
         </twin>
         </li>
       </ul>
@@ -792,6 +829,14 @@ async function editGroup(oldData?:editableGroup){
       :initial-data="editData"
       @cancel="onGroupCancel"
       @submit="onGroupSubmit"
+    />
+    <TextInput
+      v-if="showTextInput"
+      :title="textInputProps.title"
+      :default-value="textInputProps.defaultValue"
+      :placeholder="textInputProps.placeholder"
+      @cancel="onTextInputCancel"
+      @submit="onTextInputSubmit"
     />
   </div>
 </template>
@@ -804,7 +849,7 @@ async function editGroup(oldData?:editableGroup){
   display: flex;
   flex-direction: column;
   transition: width 0.3s ease;
-  border: 1px solid #ccc;
+  border: 0px solid #ccc;
   padding: 10px;
 }
 
@@ -834,12 +879,23 @@ async function editGroup(oldData?:editableGroup){
   display: flex;
   width: 100%;
   flex-direction: column;
+  border-radius: 5px;
+  gap: 4px;
 }
 
 .item-list li {
   display: flex;
   align-items: center;
+  height:34px;
   justify-content: space-between;
+  cursor: default;
+  padding: 1px 8px;
+  margin: 0;
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+
+.item-list.wide li {
   cursor: pointer;
 }
 
@@ -851,21 +907,22 @@ async function editGroup(oldData?:editableGroup){
   display: inline-block;
   visibility: visible;
 }
- 
-.current{
-  background-color: rgb(199, 199, 199);
+.item-list li:hover {
+  background-color: var(--highlight-color);
 }
+.current{
+  background-color: var(--highlight-color);
+}
+
 .list-container img {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  object-fit: contain;
 }
 .background{
-  background-color: rgb(255, 255, 255);
-  color:black;
-}
-.background-night{
-  background-color: rgb(27, 27, 27);
-  color:rgb(179, 178, 178);
+  background-color: var(--background-color);
+  color:var(--text-color);
 }
 .small-button{
   display: none;
