@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue';
+import { ref, reactive, computed, nextTick } from 'vue';
 import TextButton from './components/TextButton.vue';
 import Twin from './components/Twin.vue';
 import {getId} from './nnode.js'
@@ -72,13 +72,31 @@ function switchAddToCurrentGroup(){
 
 }
 
+// ConfirmDialog modal state
+const showConfirmDialog = ref(false);
+const confirmDialogProps = ref({ title: '' });
+let confirmDialogResolve: ((value: boolean) => void) | null = null;
 function confirm(message: string): Promise<boolean> {
-
+  confirmDialogProps.value = { title: message };
+  showConfirmDialog.value = true;
   return new Promise((resolve) => {
-    const result = window.confirm(message);
-    resolve(result);
+    confirmDialogResolve = resolve;
   });
 }
+const onConfirmCancel = () => {
+  if (confirmDialogResolve) {
+    confirmDialogResolve(false);
+    confirmDialogResolve = null;
+  }
+  showConfirmDialog.value = false;
+};
+const onConfirmSubmit = () => {
+  if (confirmDialogResolve) {
+    confirmDialogResolve(true);
+    confirmDialogResolve = null;
+  }
+  showConfirmDialog.value = false;
+};
 function prompt(message: string, defaultValue = ''): Promise<string | null> {
   return textInput(message, defaultValue);
 }
@@ -181,6 +199,7 @@ function exit(){
 import {onMounted, onBeforeUnmount}from 'vue';
 import EditGroup from './components/editGroup.vue';
 import TextInput from './components/TextInput.vue';
+import ConfirmDialog from './components/ConfirmDialog.vue';
 async function onRightClick(item:Task,e:MouseEvent){
   if(e.shiftKey){
     removeAfter(item)
@@ -444,14 +463,14 @@ function addTaskList(){
     })
   })
 }
-let globalQueryCursor:Group={
+let globalQueryCursor=reactive<Group>({
   id:'',
   name:'',
   tasks:[],
   scrollStatus:0,
   captureConditions:[],
   searchQuery:''
-}
+})
 let saveInterval:number|null=null;
 let saveFinSign=ref('存')
 async function saveStatus(){
@@ -742,6 +761,9 @@ async function editGroup(oldData?:editableGroup){
     showModal.value=false;
   }
 }
+function refresh(){
+  location.reload()
+}
 </script>
 
 <template>
@@ -750,6 +772,7 @@ async function editGroup(oldData?:editableGroup){
     <twin style="height: 30px;">
       <span>
         <text-button @click="collapse" :tooltip="'收回任务栏'"><</text-button>
+        <text-button @click="refresh" :tooltip="'刷新'">刷</text-button>
         <text-button @click="togglePin" :tooltip="pin?'当前鼠标移出后任务栏不会自动收回':'当前鼠标移出后任务栏会自动收回'">{{ pin?'定':'动' }}</text-button>
         <text-button @click="switchGlobalSearchQuery" :tooltip="globalQuery?'当前任务栏共用一个搜索条件':'当前每个任务栏使用独立的搜索条件'">{{ globalQuery?'共':'单' }}</text-button>
         <text-button @click="switchShouldTrim" :tooltip="shouldTrim?'当前搜索会去掉首尾空格':'当前搜索不会去掉首尾空格'">{{ shouldTrim?'修':'留' }}</text-button>
@@ -838,6 +861,12 @@ async function editGroup(oldData?:editableGroup){
       @cancel="onTextInputCancel"
       @submit="onTextInputSubmit"
     />
+    <ConfirmDialog
+      v-if="showConfirmDialog"
+      :title="confirmDialogProps.title"
+      @cancel="onConfirmCancel"
+      @submit="onConfirmSubmit"
+    />
   </div>
 </template>
 
@@ -925,11 +954,11 @@ async function editGroup(oldData?:editableGroup){
   color:var(--text-color);
 }
 .small-button{
-  display: none;
+  visibility: hidden;
   position: absolute;
   right: 2px;
 }
 .small-button:hover{
-  display: block;
+  visibility: visible;
 }
 </style>
