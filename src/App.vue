@@ -580,6 +580,7 @@ onMounted(async () => {
     })
 
     await rpc.pin(config.pin)
+    await rpc.setAllowRemote(config.allowRemote)
   }
   ready.value=true
 
@@ -686,10 +687,17 @@ onBeforeUnmount(() => {
 let pin=computed(()=>{
   return config.pin
 })
+let allowRemote=computed(()=>{
+  return config.allowRemote
+})
 const currentItemClicked:Ref<ItemProxy|null>=ref(null)
 async function togglePin(){
   let pinValue=await rpc.pin(!pin.value)
   config.pin=pinValue 
+}
+async function toggleAllowRemote(){ 
+  let allowRemoteValue=await rpc.setAllowRemote(!allowRemote.value)
+  config.allowRemote=allowRemoteValue
 }
 async function collapse() {
   await rpc.collapse()
@@ -778,6 +786,7 @@ function refresh(){
         <text-button @click="collapse" :tooltip="'收回任务栏'"><</text-button>
         <text-button @click="refresh" :tooltip="'刷新'">刷</text-button>
         <text-button @click="togglePin" :tooltip="pin?'当前鼠标移出后任务栏不会自动收回':'当前鼠标移出后任务栏会自动收回'">{{ pin?'定':'动' }}</text-button>
+        <text-button @click="toggleAllowRemote" :tooltip="allowRemote?'当前允许远程控制':'当前不允许远程控制'">{{ allowRemote?'远':'关' }}</text-button>
         <text-button @click="switchGlobalSearchQuery" :tooltip="globalQuery?'当前任务栏共用一个搜索条件':'当前每个任务栏使用独立的搜索条件'">{{ globalQuery?'共':'单' }}</text-button>
         <text-button @click="switchShouldTrim" :tooltip="shouldTrim?'当前搜索会去掉首尾空格':'当前搜索不会去掉首尾空格'">{{ shouldTrim?'修':'留' }}</text-button>
         <text-button @click="switchNightMode" :tooltip="{light:'当前是亮色主题',dark:'当前是暗色主题',system:'主题当前跟随系统'}[config.nightMode]">{{ {light:'日',dark:'夜',system:'随'}[config.nightMode] }}</text-button>

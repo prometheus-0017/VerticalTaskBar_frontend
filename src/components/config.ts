@@ -4,6 +4,7 @@ export let config=reactive({
   nightMode:'system',//'dark'|'light'|'system'
   shouldTrim:false,
   globalQuery:false,
+  allowRemote:true,
   addToCurrentGroup:true,
   pin:false,
 })
