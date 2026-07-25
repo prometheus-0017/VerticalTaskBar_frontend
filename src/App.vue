@@ -4,7 +4,7 @@ import TextButton from './components/TextButton.vue';
 import Twin from './components/Twin.vue';
 import {getId} from './nnode.js'
 import type { Ref } from 'vue';
-import { Client,asProxy } from 'xuri-rpc'
+import { Client } from 'xuri-rpc'
 import { config } from './components/config'
 /*
 let hostId='frontend-'+getId()
@@ -37,9 +37,10 @@ async function prepareRpc(){
 let client:Client|null=null;
 let rpc:any=null;
 import { createMain } from '@xuri-rpc/websocket-sender';
+const hostId='frontend-'+Math.random()
 async function prepareRpc(){
   let _main=null;
-  [client,_main]=await createMain('frontend-'+getId(),window.location.hostname,18765,'/')
+  [client,_main]=await createMain(hostId,window.location.hostname,18765,'/')
   rpc=await client.getObject('rpc')
   // rpc=asProxy(client)
 }
@@ -149,14 +150,14 @@ const currentTaskListToShow = computed(() => {
 });
 
 // 切换模式
-function toggleWidth() {
-  isWideMode.value = !isWideMode.value;
-  if(isWideMode.value){
-    document.body.style.width='300px';
-  }else{
-    document.body.style.width='50px';
-  }
-}
+// function toggleWidth() {
+//   isWideMode.value = !isWideMode.value;
+//   if(isWideMode.value){
+//     document.body.style.width='300px';
+//   }else{
+//     document.body.style.width='50px';
+//   }
+// }
 function next(){
   return new Promise(resolve=>{
     nextTick(()=>resolve(null))
@@ -582,82 +583,85 @@ onMounted(async () => {
   }
   ready.value=true
 
-  await rpc.setCallback((updateInfos:Array<WindowChangeInfo>)=>{
-    for(let updateInfo of updateInfos){
-      switch(updateInfo.type){
-        case 'add':
-          taskMap.set(mkFullId(updateInfo.data.id,updateInfo.data.system),updateInfo.data)
-          getListById('main')?.push(updateInfo.data)
-          for(let group of groups.value){
-            if(group.id=='main'){
-              continue
-            }
-            for(let condition of group.captureConditions||[]){
-              let val=null
-              if(condition.type=='name'){
-                //todo 你他妈的远程哪有modify？
-                val=updateInfo.data.modifiedName
-              }else if(condition.type=='originName'){
-                val=updateInfo.data.originalName
-              }else if(condition.type=='pwd'){
-                val=updateInfo.data.pwd
-              }else{
-                console.warn('未知的condition.type')
-              }
-              if(val!=null && 
-                  condition.value!='' &&
-                  val.toLowerCase().includes(condition.value.toLowerCase())){
-                group.tasks.push(updateInfo.data)
-                break;
-              }
-            }
-
-          }
-          for(let group of groups.value){
-            if(group.id==currentTaskListShowing.value){
-              let found=false
-              for(let task of group.tasks){
-                if(task.id==updateInfo.data.id){
-                  found=true
-                  break
-                }
-              }
-              if(!found && config.addToCurrentGroup){
-                group.tasks.push(updateInfo.data)
-              }
-            }
-          }
-          break
-        case 'change':
-          let id=updateInfo.data.id
-          let item=updateInfo.data
-          let task=taskMap.get(mkFullId(id,updateInfo.data.system))
-          if(!task){
-            console.warn('taskMap.get(id)==null')
-          }else{
-            task.originalName=item.originalName
-            task.originalIcon=item.originalIcon
-          }
-          break
-        case 'delete':
-          taskMap.delete(mkFullId(updateInfo.data.id,updateInfo.data.system))
-          // getListById('main')?.splice(getListById('main')?.findIndex(x=>x.id==updateInfo.data.id),1)
-          break
-      }
-    }
-    let removed=updateInfos.filter(x=>x.type=='delete').map(x=>x.data).map(x=>x.id)
-    groups.value.forEach(tag=>{
-      tag.tasks=tag.tasks.filter(originItem=>removed.includes(originItem.id)==false)
-    })
-    return '';// 返回undef不应该出发这么傻逼的报错
-  })
+  
 
   // setInterval(refresh,500)
 
   window.addEventListener('keydown', handleKeyDown);
-  setInterval(()=>{
-    rpc.echo()
-  },500)
+  setInterval(async ()=>{
+    if(!await rpc.checkLogin(hostId)){
+      await rpc.setCallback(hostId,(updateInfos:Array<WindowChangeInfo>)=>{
+      for(let updateInfo of updateInfos){
+        switch(updateInfo.type){
+          case 'add':
+            taskMap.set(mkFullId(updateInfo.data.id,updateInfo.data.system),updateInfo.data)
+            getListById('main')?.push(updateInfo.data)
+            for(let group of groups.value){
+              if(group.id=='main'){
+                continue
+              }
+              for(let condition of group.captureConditions||[]){
+                let val=null
+                if(condition.type=='name'){
+                  //todo 你他妈的远程哪有modify？
+                  val=updateInfo.data.modifiedName
+                }else if(condition.type=='originName'){
+                  val=updateInfo.data.originalName
+                }else if(condition.type=='pwd'){
+                  val=updateInfo.data.pwd
+                }else{
+                  console.warn('未知的condition.type')
+                }
+                if(val!=null && 
+                    condition.value!='' &&
+                    val.toLowerCase().includes(condition.value.toLowerCase())){
+                  group.tasks.push(updateInfo.data)
+                  break;
+                }
+              }
+
+            }
+            for(let group of groups.value){
+              if(group.id==currentTaskListShowing.value){
+                let found=false
+                for(let task of group.tasks){
+                  if(task.id==updateInfo.data.id){
+                    found=true
+                    break
+                  }
+                }
+                if(!found && config.addToCurrentGroup){
+                  group.tasks.push(updateInfo.data)
+                }
+              }
+            }
+            break
+          case 'change':
+            let id=updateInfo.data.id
+            let item=updateInfo.data
+            let task=taskMap.get(mkFullId(id,updateInfo.data.system))
+            if(!task){
+              console.warn('taskMap.get(id)==null')
+            }else{
+              task.originalName=item.originalName
+              task.originalIcon=item.originalIcon
+            }
+            break
+          case 'delete':
+            taskMap.delete(mkFullId(updateInfo.data.id,updateInfo.data.system))
+            // getListById('main')?.splice(getListById('main')?.findIndex(x=>x.id==updateInfo.data.id),1)
+            break
+        }
+      }
+      let removed=updateInfos.filter(x=>x.type=='delete').map(x=>x.data).map(x=>x.id)
+      groups.value.forEach(tag=>{
+        tag.tasks=tag.tasks.filter(originItem=>removed.includes(originItem.id)==false)
+      })
+      return '';// 返回undef不应该出发这么傻逼的报错
+    })
+        
+      }
+    },500)
 });
 async function onClickList(item:Task){
   currentItemClicked.value={type:'list',item}
@@ -807,17 +811,16 @@ function refresh(){
 
     <!-- 第2行：搜索框 -->
     <div class="row search-box" style="height: 30px;">
-      <div style="width: 100%;height: 100%;position: relative;padding: 0;margin: 0;">
+      <div class="input-wrapper" v-if="isWideMode">
         <input
-        style="width: 300px;"
-          v-if="isWideMode"
           type="text"
           placeholder="Filter..."
           v-model="queryCursor!.searchQuery"
         />
         <span 
-          class="small-button"
-          @click="queryCursor!.searchQuery=''" > x </span>
+          v-if="queryCursor?.searchQuery"
+          class="clear-button"
+          @click="queryCursor!.searchQuery=''" >×</span>
       </div>
     </div>
 
@@ -953,12 +956,51 @@ function refresh(){
   background-color: var(--background-color);
   color:var(--text-color);
 }
-.small-button{
-  visibility: hidden;
-  position: absolute;
-  right: 2px;
+.input-wrapper {
+  position: relative;
+  width: 300px;
+  height: 100%;
 }
-.small-button:hover{
-  visibility: visible;
+
+.input-wrapper input {
+  width: 100%;
+  height: 100%;
+  padding: 0 24px 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--background-color);
+  color: var(--text-color);
+  font-size: 13px;
+  box-sizing: border-box;
+  outline: none;
+}
+
+/* .input-wrapper input:focus {
+  border-color: #409eff;
+} */
+
+.clear-button {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-color);
+  opacity: 0;
+  /* line-height: 1; */
+  padding: 2px;
+  /* transition: opacity 0.2s; */
+  pointer-events: none;
+}
+
+.clear-button:hover {
+  opacity: 1;
+}
+
+.input-wrapper:hover .clear-button,
+.input-wrapper input:focus + .clear-button {
+  opacity: 1;
+  pointer-events: auto;
 }
 </style>

@@ -69,6 +69,7 @@ button:focus-visible {
 :root {
   --background-color: #e3e3e3;
   --text-color: #000000;
+  --border-color: #cccccc;
   --highlight-color: #f1f1f1;
   --button-highlight-color: #dcdcdc;
   color-scheme: light dark; /* 让浏览器原生控件适配 */
@@ -78,6 +79,7 @@ button:focus-visible {
 html.dark {
   --background-color: #333333;
   --text-color: rgba(255, 255, 255, 0.938);
+  --border-color: #555555;
   --highlight-color: #4c4c4c;
   --button-highlight-color: #5C5C5C;
 
@@ -87,6 +89,7 @@ html.dark {
 html.light {
   --background-color: #e3e3e3;
   --text-color: #000000;
+  --border-color: #cccccc;
   --highlight-color: #f1f1f1;
   --button-highlight-color: #dcdcdc;
 
@@ -97,6 +100,7 @@ html.light {
   :root:not(.dark):not(.light) {
     --background-color: #333333;
     --text-color: rgba(255, 255, 255, 0.938);
+    --border-color: #555555;
     --highlight-color: #4c4c4c;
     --button-highlight-color: #5C5C5C;
 
