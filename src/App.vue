@@ -510,6 +510,50 @@ function onDropListOver(event:DragEvent,item:Task){
     rpc.toTop(item.id,item.system)
   }
 }
+function onDropListGap(event:DragEvent){
+  if(event.target !== event.currentTarget) return
+  if(!itemDragging) return
+  if(itemDragging.type !== 'list') return
+  const source = itemDragging.item as Task
+  const taskList = getListById(currentTaskListShowing.value)
+  if(taskList == null) return
+
+  const ul = event.currentTarget as HTMLElement
+  const lis = Array.from(ul.children).filter(el => el.tagName === 'LI') as HTMLElement[]
+  if(lis.length === 0) return
+
+  const mouseY = event.clientY
+  let insertBeforeVisibleIdx = lis.length
+  for(let i = 0; i < lis.length; i++){
+    const rect = lis[i].getBoundingClientRect()
+    if(mouseY < rect.top){
+      insertBeforeVisibleIdx = i
+      break
+    }
+  }
+
+  const visibleList = currentTaskListToShow.value
+  if(insertBeforeVisibleIdx >= visibleList.length){
+    // 在所有可见项之后，直接从原列表删除并追加到末尾
+    const idxOld = taskList.findIndex(item => item === source)
+    if(idxOld === -1) return
+    taskList.splice(idxOld, 1)
+    taskList.push(source)
+  } else {
+    const nextVisible = visibleList[insertBeforeVisibleIdx]
+    if(nextVisible === source) return // 缝隙就在自己后面，无需移动
+    const nextVisibleIdx = taskList.findIndex(item => item === nextVisible)
+    if(nextVisibleIdx === -1) return
+    const idxOld = taskList.findIndex(item => item === source)
+    if(idxOld === -1) return
+    // 先从原位置删除
+    taskList.splice(idxOld, 1)
+    // 删除后 nextVisible 在新数组中的索引
+    const adjustedIdx = idxOld < nextVisibleIdx ? nextVisibleIdx - 1 : nextVisibleIdx
+    taskList.splice(adjustedIdx, 0, source)
+  }
+  itemDragging = null
+}
 function onDropTagOver(event:DragEvent,item:Group){
   event.preventDefault()
   if(event.dataTransfer?.types.includes('Files')){
@@ -835,7 +879,7 @@ function refresh(){
 
     <!-- 第3行：列表 -->
     <div class="row list-container" style="flex:1;display: flex;overflow-x: hidden;overflow-y: auto;" ref="scrollContainer">
-      <ul class="item-list" :class="{ wide: isWideMode }" style="padding:0;flex:1">
+      <ul class="item-list" :class="{ wide: isWideMode }" style="padding:0;flex:1" @dragover.prevent @drop="onDropListGap">
         <li
           :class="{current: taskEqual(currentItemClicked?.item as Task,item)}"
           v-for="item,idx in currentTaskListToShow"
